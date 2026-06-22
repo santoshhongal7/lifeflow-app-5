@@ -17,15 +17,33 @@ export default function DailyCheckIn() {
   const goal = goalId ? getGoalById(goalId) : null
   const [selectedGoalId, setSelectedGoalId] = useState(goalId || '')
   const [selectedDate, setSelectedDate] = useState(getTodayKey())
+  const [startDate, setStartDate] = useState(getTodayKey())
+  const [endDate, setEndDate] = useState(getTodayKey())
+  const [isMultiDay, setIsMultiDay] = useState(false)
   const [entryStates, setEntryStates] = useState<{ [key: string]: CheckInStatus }>({})
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [showDatePicker, setShowDatePicker] = useState(false)
+  const [submitProgress, setSubmitProgress] = useState(0)
+  const [submitTotal, setSubmitTotal] = useState(0)
 
   const today = getTodayKey()
   const currentGoal = selectedGoalId ? getGoalById(selectedGoalId) : null
   const checkInForDate = checkIns.find((ci) => ci.goalId === selectedGoalId && ci.date === selectedDate)
+
+  // Helper: Get all dates between start and end
+  const getDateRange = (start: string, end: string): string[] => {
+    const dates: string[] = []
+    let current = new Date(start)
+    const endDateTime = new Date(end)
+
+    while (current <= endDateTime) {
+      dates.push(toDateKey(current))
+      current.setDate(current.getDate() + 1)
+    }
+    return dates
+  }
 
   // Initialize entry states from existing check-in
   const initializeStates = () => {
@@ -139,14 +157,39 @@ export default function DailyCheckIn() {
       const completionPercentage = Math.round((completedCount / currentGoal.subGoals.length) * 100)
       const isComplete = completedCount === currentGoal.subGoals.length
 
-      await submitDailyCheckIn(user.uid, selectedGoalId, selectedDate, subGoalEntries, isComplete, completionPercentage)
+      // Multi-day submission
+      if (isMultiDay) {
+        const datesToSubmit = getDateRange(startDate, endDate)
+        setSubmitTotal(datesToSubmit.length)
 
-      setSelectedGoalId('')
-      navigate('/')
+        for (let i = 0; i < datesToSubmit.length; i++) {
+          const dateToSubmit = datesToSubmit[i]
+          await submitDailyCheckIn(
+            user.uid,
+            selectedGoalId,
+            dateToSubmit,
+            subGoalEntries,
+            isComplete,
+            completionPercentage
+          )
+          setSubmitProgress(i + 1)
+        }
+        setError(`✅ Check-ins submitted for ${datesToSubmit.length} days`)
+      } else {
+        // Single-day submission
+        await submitDailyCheckIn(user.uid, selectedGoalId, selectedDate, subGoalEntries, isComplete, completionPercentage)
+      }
+
+      setTimeout(() => {
+        setSelectedGoalId('')
+        navigate('/')
+      }, 1500)
     } catch (err: any) {
       setError(err.message || 'Failed to submit check-in')
     } finally {
       setSubmitting(false)
+      setSubmitProgress(0)
+      setSubmitTotal(0)
     }
   }
 
@@ -187,33 +230,92 @@ export default function DailyCheckIn() {
           </div>
         </div>
 
+        {/* Mode Toggle */}
+        <div className="mb-4 flex gap-2">
+          <button
+            onClick={() => setIsMultiDay(false)}
+            className={`flex-1 py-2 rounded-btn text-sm font-medium transition-all ${
+              !isMultiDay
+                ? 'gradient-button'
+                : 'glass-button'
+            }`}
+          >
+            Single Day
+          </button>
+          <button
+            onClick={() => setIsMultiDay(true)}
+            className={`flex-1 py-2 rounded-btn text-sm font-medium transition-all ${
+              isMultiDay
+                ? 'gradient-button'
+                : 'glass-button'
+            }`}
+          >
+            Date Range
+          </button>
+        </div>
+
         {/* Date Selector */}
         <div className="mb-4 p-3 rounded-btn" style={{ background: 'var(--bg-secondary)' }}>
-          <div className="flex items-center justify-between gap-2">
-            <button
-              onClick={() => setSelectedDate(addDays(selectedDate, -1))}
-              className="glass-button px-3 py-2 text-sm"
-            >
-              ← Prev
-            </button>
-            <button
-              onClick={() => setShowDatePicker(!showDatePicker)}
-              className="flex-1 glass-button flex items-center justify-center gap-2 px-3 py-2"
-            >
-              <Calendar size={16} />
-              {new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </button>
-            <button
-              onClick={() => setSelectedDate(addDays(selectedDate, 1))}
-              disabled={selectedDate >= today}
-              className="glass-button px-3 py-2 text-sm disabled:opacity-50"
-            >
-              Next →
-            </button>
-          </div>
+          {!isMultiDay ? (
+            // Single Day Mode
+            <div className="flex items-center justify-between gap-2">
+              <button
+                onClick={() => setSelectedDate(addDays(selectedDate, -1))}
+                className="glass-button px-3 py-2 text-sm"
+              >
+                ← Prev
+              </button>
+              <button
+                onClick={() => setShowDatePicker(!showDatePicker)}
+                className="flex-1 glass-button flex items-center justify-center gap-2 px-3 py-2"
+              >
+                <Calendar size={16} />
+                {new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </button>
+              <button
+                onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+                disabled={selectedDate >= today}
+                className="glass-button px-3 py-2 text-sm disabled:opacity-50"
+              >
+                Next →
+              </button>
+            </div>
+          ) : (
+            // Multi Day Mode
+            <div className="space-y-2">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  max={today}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="glass-input w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  min={startDate}
+                  max={today}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="glass-input w-full"
+                />
+              </div>
+              <div className="p-2 rounded-btn text-sm" style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1' }}>
+                📅 {getDateRange(startDate, endDate).length} days selected
+              </div>
+            </div>
+          )}
 
           {/* Date Picker */}
-          {showDatePicker && (
+          {showDatePicker && !isMultiDay && (
             <div className="mt-3">
               <input
                 type="date"
@@ -307,6 +409,26 @@ export default function DailyCheckIn() {
         />
       </div>
 
+      {/* Submit Progress */}
+      {submitTotal > 0 && (
+        <div className="mb-4 p-4 rounded-btn" style={{ background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+          <div className="flex items-center justify-between mb-2">
+            <span style={{ color: '#22c55e' }} className="text-sm font-semibold">
+              Submitting check-ins...
+            </span>
+            <span style={{ color: '#22c55e' }} className="text-sm">
+              {submitProgress}/{submitTotal}
+            </span>
+          </div>
+          <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+            <div
+              className="bg-green-500 h-full transition-all duration-300"
+              style={{ width: `${(submitProgress / submitTotal) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Submit Button */}
       <button
         onClick={handleSubmit}
@@ -314,7 +436,13 @@ export default function DailyCheckIn() {
         className="gradient-button w-full flex items-center justify-center gap-2"
       >
         <Save size={18} />
-        {submitting ? 'Submitting...' : 'Submit Check-In'}
+        {submitting
+          ? isMultiDay
+            ? `Submitting ${submitProgress}/${submitTotal}...`
+            : 'Submitting...'
+          : isMultiDay
+            ? `Submit for ${getDateRange(startDate, endDate).length} Days`
+            : 'Submit Check-In'}
       </button>
     </div>
   )
