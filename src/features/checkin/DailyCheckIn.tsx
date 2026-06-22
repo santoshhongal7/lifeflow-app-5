@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useGoalStore } from '@/app/store/goalStore'
 import { useCheckInStore } from '@/app/store/checkInStore'
 import { useAuthStore } from '@/app/store/authStore'
-import { getTodayKey } from '@/shared/utils/dateUtils'
-import { CheckCircle2, Circle, ChevronLeft, Save } from 'lucide-react'
+import { getTodayKey, toDateKey, addDays } from '@/shared/utils/dateUtils'
+import { CheckCircle2, Circle, ChevronLeft, Save, Calendar } from 'lucide-react'
 import { CheckInStatus } from '@/shared/types'
 
 export default function DailyCheckIn() {
@@ -16,24 +16,26 @@ export default function DailyCheckIn() {
 
   const goal = goalId ? getGoalById(goalId) : null
   const [selectedGoalId, setSelectedGoalId] = useState(goalId || '')
+  const [selectedDate, setSelectedDate] = useState(getTodayKey())
   const [entryStates, setEntryStates] = useState<{ [key: string]: CheckInStatus }>({})
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [showDatePicker, setShowDatePicker] = useState(false)
 
   const today = getTodayKey()
   const currentGoal = selectedGoalId ? getGoalById(selectedGoalId) : null
-  const todayCheckIn = checkIns.find((ci) => ci.goalId === selectedGoalId && ci.date === today)
+  const checkInForDate = checkIns.find((ci) => ci.goalId === selectedGoalId && ci.date === selectedDate)
 
   // Initialize entry states from existing check-in
   const initializeStates = () => {
-    if (todayCheckIn) {
+    if (checkInForDate) {
       const states: { [key: string]: CheckInStatus } = {}
-      todayCheckIn.subGoalEntries.forEach((entry) => {
+      checkInForDate.subGoalEntries.forEach((entry) => {
         states[entry.subGoalId] = entry.status
       })
       setEntryStates(states)
-      setNotes(todayCheckIn.notes || '')
+      setNotes(checkInForDate.notes || '')
     } else {
       setEntryStates({})
       setNotes('')
@@ -137,7 +139,7 @@ export default function DailyCheckIn() {
       const completionPercentage = Math.round((completedCount / currentGoal.subGoals.length) * 100)
       const isComplete = completedCount === currentGoal.subGoals.length
 
-      await submitDailyCheckIn(user.uid, selectedGoalId, today, subGoalEntries, isComplete, completionPercentage)
+      await submitDailyCheckIn(user.uid, selectedGoalId, selectedDate, subGoalEntries, isComplete, completionPercentage)
 
       setSelectedGoalId('')
       navigate('/')
@@ -179,8 +181,53 @@ export default function DailyCheckIn() {
             <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
               {currentGoal.title}
             </h1>
-            <p style={{ color: 'var(--text-secondary)' }}>Today's Check-In</p>
+            <p style={{ color: 'var(--text-secondary)' }}>
+              {selectedDate === today ? "Today's Check-In" : `Check-In for ${new Date(selectedDate).toLocaleDateString()}`}
+            </p>
           </div>
+        </div>
+
+        {/* Date Selector */}
+        <div className="mb-4 p-3 rounded-btn" style={{ background: 'var(--bg-secondary)' }}>
+          <div className="flex items-center justify-between gap-2">
+            <button
+              onClick={() => setSelectedDate(addDays(selectedDate, -1))}
+              className="glass-button px-3 py-2 text-sm"
+            >
+              ← Prev
+            </button>
+            <button
+              onClick={() => setShowDatePicker(!showDatePicker)}
+              className="flex-1 glass-button flex items-center justify-center gap-2 px-3 py-2"
+            >
+              <Calendar size={16} />
+              {new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </button>
+            <button
+              onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+              disabled={selectedDate >= today}
+              className="glass-button px-3 py-2 text-sm disabled:opacity-50"
+            >
+              Next →
+            </button>
+          </div>
+
+          {/* Date Picker */}
+          {showDatePicker && (
+            <div className="mt-3">
+              <input
+                type="date"
+                value={selectedDate}
+                max={today}
+                onChange={(e) => {
+                  setSelectedDate(e.target.value)
+                  setShowDatePicker(false)
+                  initializeStates()
+                }}
+                className="glass-input w-full"
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3">

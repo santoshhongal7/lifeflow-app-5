@@ -5,7 +5,7 @@ import { useAuthStore } from '@/app/store/authStore'
 import { getActiveGoals } from '@/shared/utils/goalUtils'
 import { getTodayKey } from '@/shared/utils/dateUtils'
 import { Link } from 'react-router-dom'
-import { CheckCircle2, Circle, Plus } from 'lucide-react'
+import { CheckCircle2, Circle, Plus, Clock } from 'lucide-react'
 
 export default function Dashboard() {
   const { user } = useAuthStore()
@@ -58,6 +58,22 @@ export default function Dashboard() {
         <p style={{ color: 'var(--text-secondary)' }}>
           {activeGoals.length} active goal{activeGoals.length !== 1 ? 's' : ''}
         </p>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="mb-6 flex gap-2">
+        <Link
+          to="/checkin"
+          className="glass-button flex items-center gap-2 text-sm"
+          style={{
+            background: 'rgba(99, 102, 241, 0.2)',
+            color: '#6366f1',
+            border: '1px solid rgba(99, 102, 241, 0.3)',
+          }}
+        >
+          <Clock size={16} />
+          Log Past Activity
+        </Link>
       </div>
 
       {/* Empty State */}
